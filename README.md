@@ -9,14 +9,12 @@
   - individual raw -> stack npy (ct) 
   - shape : patients, cnts(different), x, y
 
-    python raw2npy_stack.py  
-    
-    python csv2maskNpy_stack.py
+  python csv2maskNpy_stack.py
 
   - individual csv(45 of random seed list) -> stack npy (label)
   - shape : patients, cnts(different), x, y, 1
-
-      python resample.py
+  
+  python resample.py
 
   - remove black slices and resample to 150,128,128,1 (ct, label)
   - at the end, label also saved as y_train (shape=[:,:,:,:,2])
