@@ -1,3 +1,9 @@
+### Result1 : Randomly inserted GAN nodule detection
+(https://user-images.githubusercontent.com/97432613/156339841-adb277ec-ac5f-4286-8d86-506930150ae0.png)
+
+### Result2 : Manually inserted additional original nodule detection
+(https://user-images.githubusercontent.com/97432613/156339861-eabeb960-11e5-4094-b428-6acb5eb5b003.png)
+
 # 1. Data preprocessing
 
     python raw2npy_stack.py  
