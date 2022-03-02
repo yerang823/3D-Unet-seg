@@ -51,5 +51,7 @@
 
 ![result_2](https://user-images.githubusercontent.com/97432613/156354255-2b789721-8428-41d7-a364-37871ddb5664.png)
 
- ![result_3](https://user-images.githubusercontent.com/97432613/156354248-31937a9a-5b20-49b0-a144-2df921b15333.png)
+ <p align="center">
+    <img src="https://user-images.githubusercontent.com/97432613/156354248-31937a9a-5b20-49b0-a144-2df921b15333.png"  width="50%" height="50%"/>
+</p>
  
