@@ -1,8 +1,17 @@
-### Result1 : Randomly inserted GAN nodule detection
-![randomGAN_detection](https://user-images.githubusercontent.com/97432613/156339841-adb277ec-ac5f-4286-8d86-506930150ae0.png)
+## Result1 : Randomly inserted GAN nodule detection
+<p align="center">
+    <img src="https://user-images.githubusercontent.com/97432613/156339841-adb277ec-ac5f-4286-8d86-506930150ae0.png"  width="80%" height="80%"/>
+</p>
 
-### Result2 : Manually inserted additional original nodule detection
-![manualORI_detection](https://user-images.githubusercontent.com/97432613/156339861-eabeb960-11e5-4094-b428-6acb5eb5b003.png)
+## Result2 : Manually inserted additional original nodule detection
+<p align="center">
+    <img src="https://user-images.githubusercontent.com/97432613/156339861-eabeb960-11e5-4094-b428-6acb5eb5b003.png"  width="80%" height="80%"/>
+</p>
+
+## 3D segmentation workflow
+<p align="center">
+    <img src="https://user-images.githubusercontent.com/97432613/156349405-42fc19ca-de28-4a62-abc7-9fff7ce38a23.png"  width="80%" height="80%"/>
+</p>
 
 # 1. Data preprocessing
 
