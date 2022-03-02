@@ -46,6 +46,13 @@
 
   - test and evaluate
   
+  
+  
+# Overall project workflow
+![전체workflow](https://user-images.githubusercontent.com/97432613/156355522-384f9f6e-7216-4fc1-b4b8-bc5917c439b1.png)
+
+[[3D-CT-GAN repository](https://github.com/yerang823/3D-CT-GAN)]
+
 # Final result
 ![result_1](https://user-images.githubusercontent.com/97432613/156354252-77b71722-c62e-4b25-be1f-f96871191555.png)
 
