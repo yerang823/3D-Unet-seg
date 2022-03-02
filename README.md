@@ -9,7 +9,9 @@
   - individual raw -> stack npy (ct) 
   - shape : patients, cnts(different), x, y
 
-      python csv2maskNpy_stack.py
+    python raw2npy_stack.py  
+    
+    python csv2maskNpy_stack.py
 
   - individual csv(45 of random seed list) -> stack npy (label)
   - shape : patients, cnts(different), x, y, 1
