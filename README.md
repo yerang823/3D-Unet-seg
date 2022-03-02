@@ -1,21 +1,17 @@
-# =========================================================
-# 	RANDOM GAN NODULE
-# =========================================================
-
 # 1. Data preprocessing
 
     python raw2npy_stack.py  
 
   - individual raw -> stack npy (ct) 
   - shape : patients, cnts(different), x, y
-'''python
+```python
     python csv2maskNpy_stack.py
-'''
+```
   - individual csv(45 of random seed list) -> stack npy (label)
   - shape : patients, cnts(different), x, y, 1
-  
+```python
     python resample.py
-
+```
   - remove black slices and resample to 150,128,128,1 (ct, label)
   - at the end, label also saved as y_train (shape=[:,:,:,:,2])
   - save 300_ct_resam.py, 300_label_resam.py, 300_ytrain.py
