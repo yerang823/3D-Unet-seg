@@ -1,3 +1,5 @@
+[Full Paper Here](https://arxiv.org/pdf/1804.03999.pdf)
+
 ## Result1 : Randomly inserted GAN nodule detection
 <p align="center">
     <img src="https://user-images.githubusercontent.com/97432613/156339841-adb277ec-ac5f-4286-8d86-506930150ae0.png"  width="80%" height="80%"/>
