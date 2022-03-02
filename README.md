@@ -44,13 +44,7 @@
 
     python test.py
 
-  - test and evaluate
-  
-  
-  
-  
-  
-  
+  - test and evaluate  
   
   
 # Overall project workflow
