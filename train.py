@@ -79,7 +79,7 @@ def U_Net_3D(time, img_w, img_h, n_label):
     depth = 4
     features = 32
     down_layer = []
-    supervision_layer = []
+    encoder_featuremap = []
     
     for i in range(depth):
         
@@ -94,19 +94,19 @@ def U_Net_3D(time, img_w, img_h, n_label):
         features = features // 2
         x = attention_up_and_concate(x, down_layer[i])
         x = Conv3D_block(x, features)
-        supervision_layer.append(x)    
+        encoder_featuremap.append(x)    
        
-#     output_1 = UpSampling3D((8, 8, 8))(supervision_layer[0])
+#     output_1 = UpSampling3D((8, 8, 8))(encoder_featuremap[0])
 #     output_1 = Conv3D(n_label, 3, activation='sigmoid', padding='same', name='out_1')(output_1)
 
-    output_2 = UpSampling3D((4, 4, 4))(supervision_layer[1])
+    output_2 = UpSampling3D((4, 4, 4))(encoder_featuremap[1])
     output_2 = Conv3D(n_label, 3, activation='sigmoid', padding='same', name='out_2')(output_2)
     
-    output_3 = UpSampling3D((2, 2, 2))(supervision_layer[2])
+    output_3 = UpSampling3D((2, 2, 2))(encoder_featuremap[2])
     output_3 = Conv3D(n_label, 3, activation='sigmoid',padding='same', name='out_3')(output_3) 
     
-#     output_4 = UpSampling3D(features, (1, 1, 1))(supervision_layer[3])
-    output_4 = Conv3D(n_label, 3, activation='sigmoid', padding='same', name='out_4')(supervision_layer[3]) 
+#     output_4 = UpSampling3D(features, (1, 1, 1))(encoder_featuremap[3])
+    output_4 = Conv3D(n_label, 3, activation='sigmoid', padding='same', name='out_4')(encoder_featuremap[3]) 
     
     model = Model(inputs = inputs, outputs = [output_2, output_3, output_4])
     model.summary()
