@@ -15,6 +15,9 @@
     <img src="https://user-images.githubusercontent.com/97432613/156349405-42fc19ca-de28-4a62-abc7-9fff7ce38a23.png"  width="80%" height="80%"/>
 </p>
 
+## Attention block
+![unet-attention-04](https://user-images.githubusercontent.com/97432613/156513021-f6db22cf-7121-44bd-b5e9-d1fd5f657572.jpg)
+
 # 1. Data preprocessing
 
     python raw2npy_stack.py  
