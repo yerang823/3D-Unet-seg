@@ -87,6 +87,7 @@ def U_Net_3D(time, img_w, img_h, n_label):
         down_layer.append(x)
         x = MaxPooling3D(pool_size=[2, 2, 2], strides=[2, 2, 2])(x)
         features = features * 2
+        
     x = Conv3D_block(x, features)
     
     for i in reversed(range(depth)):
@@ -106,9 +107,6 @@ def U_Net_3D(time, img_w, img_h, n_label):
     
 #     output_4 = UpSampling3D(features, (1, 1, 1))(supervision_layer[3])
     output_4 = Conv3D(n_label, 3, activation='sigmoid', padding='same', name='out_4')(supervision_layer[3]) 
-    
-#     outputs = conv_last
-#     output_all = (x_output_1+x_output_2+x_output_3+outputs)/4
     
     model = Model(inputs = inputs, outputs = [output_2, output_3, output_4])
     model.summary()
