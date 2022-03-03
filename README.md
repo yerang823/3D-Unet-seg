@@ -45,14 +45,14 @@
     python test.py
 
   - test and evaluate  
-  
-  
-# Overall project workflow
+#
+#
+## Overall project workflow(GAN + Unet)
 ![전체workflow](https://user-images.githubusercontent.com/97432613/156355522-384f9f6e-7216-4fc1-b4b8-bc5917c439b1.png)
 
 [[3D-CT-GAN repository](https://github.com/yerang823/3D-CT-GAN)]
 
-# Final result
+## Final result
 ![result_1](https://user-images.githubusercontent.com/97432613/156354252-77b71722-c62e-4b25-be1f-f96871191555.png)
 
 ![result_2](https://user-images.githubusercontent.com/97432613/156354255-2b789721-8428-41d7-a364-37871ddb5664.png)
@@ -61,3 +61,7 @@
     <img src="https://user-images.githubusercontent.com/97432613/156354248-31937a9a-5b20-49b0-a144-2df921b15333.png"  width="50%" height="50%"/>
 </p>
  
+## FN images
+![FN_1](https://user-images.githubusercontent.com/97432613/156479867-0adec574-f1b3-41b6-8a13-9efda3a8622e.png)
+![FN_2](https://user-images.githubusercontent.com/97432613/156479871-9a3330b7-0ced-4af1-a9e8-247968dcf188.png)
+![FN_3](https://user-images.githubusercontent.com/97432613/156479874-150f070a-8c9e-4546-a344-bcf7ffa4ecf8.png)
