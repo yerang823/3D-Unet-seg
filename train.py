@@ -33,6 +33,9 @@ from tensorflow_large_model_support import LMS
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 
 
+# ===========================================================
+# Layers
+# ===========================================================
 
 def upsample_conv(filters, kernel_size, strides, padding):
     return Conv3DTranspose(filters, kernel_size, strides=strides, padding=padding)
@@ -42,13 +45,13 @@ def upsample_simple(filters, kernel_size, strides, padding):
     return UpSampling3D(strides)
 
 
-# ¸¹Àº ÆÄ¶ó¹ÌÅÍ°¡ »ı±â±â ¶§¹®¿¡ °¡Àå Áß¿äÇÑ ÇÇÃÄ¸ÊÀ» »Ì´Â ¾Æ·§´Ü¿¡¸¸ ³Ö´Â´Ù´Â °³³ä
+# ë§ì€ íŒŒë¼ë¯¸í„°ê°€ ìƒê¸°ê¸° ë•Œë¬¸ì— ê°€ì¥ ì¤‘ìš”í•œ í”¼ì³ë§µì„ ë½‘ëŠ” ì•„ë«ë‹¨ì—ë§Œ ë„£ëŠ”ë‹¤ëŠ” ê°œë…
 def Multi_dilated_conv(inputs, filters):
 
     dilated_conv1 = Conv3D(64, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(inputs)
     dilated_conv1 = Conv3D(64, (3, 3, 3), strides=(1, 1, 1), activation = None, dilation_rate = (2,2,2), padding='same', kernel_initializer='he_normal')(dilated_conv1) 
     dilated_conv1 = Conv3D(filters, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(dilated_conv1)
-    dilated_conv1_add = add([inputs, dilated_conv1])  ## ÀÌºÎºĞÀÌ ¼ôÄÆ (residual)
+    dilated_conv1_add = add([inputs, dilated_conv1])  ## ì´ë¶€ë¶„ì´ ìˆì»· (residual)
     dilated_conv1_add = BatchNormalization(axis=4, scale=False)(dilated_conv1_add)  
     dilated_conv1_add = Activation(activation='relu')(dilated_conv1_add)
   
@@ -67,7 +70,7 @@ def Multi_dilated_conv(inputs, filters):
     dilated_conv3_add = Activation(activation='relu')(dilated_conv3_add)
 
     #dilated_conv4 = Conv3D(64, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(inputs)
-    #dilated_conv4 = Conv3D(64, (3, 3, 3), strides=(1, 1, 1), activation = None, dilation_rate = (16,16,16), padding='same', kernel_initializer='he_normal')(dilated_conv4) ## ÀÎÇ² ÀÌ¹ÌÁö°¡ 128,128·Î ÀÛ±â¶§¹®¿¡ 16±îÁö´Â ÇÊ¿ä¾øÀ» ¼ö ÀÖ´Ù.
+    #dilated_conv4 = Conv3D(64, (3, 3, 3), strides=(1, 1, 1), activation = None, dilation_rate = (16,16,16), padding='same', kernel_initializer='he_normal')(dilated_conv4) ## ì¸í’‹ ì´ë¯¸ì§€ê°€ 128,128ë¡œ ì‘ê¸°ë•Œë¬¸ì— 16ê¹Œì§€ëŠ” í•„ìš”ì—†ì„ ìˆ˜ ìˆë‹¤.
     #dilated_conv4 = Conv3D(filters, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(dilated_conv4)
     #dilated_conv4_add = add([inputs, dilated_conv4])
     #dilated_conv4_add = BatchNormalization(axis=4, scale=False)(dilated_conv4_add)
@@ -78,7 +81,7 @@ def Multi_dilated_conv(inputs, filters):
     pyramid = concatenate([dilated_conv1_add, dilated_conv2_add, dilated_conv3_add], axis=4)
     return pyramid
   
-#ÇÇÃÄ »Ì´Â ºÎºĞ or skip concat ºÎºĞ or RCLºí¶ô Åë°ú ÈÄ concat
+#í”¼ì³ ë½‘ëŠ” ë¶€ë¶„ or skip concat ë¶€ë¶„ or RCLë¸”ë½ í†µê³¼ í›„ concat
 def RCL_block(input, filedepth): 
     conv1 = Conv3D(filters=filedepth, kernel_size=[3, 3, 3], strides=(1, 1, 1), padding='same',activation='relu')(input)
     stack2 = BatchNormalization(axis=4, scale=False)(conv1)
@@ -90,7 +93,7 @@ def RCL_block(input, filedepth):
     stack4 = BatchNormalization(axis=4, scale=False)(stack3)
 
     conv3 = Conv3D(filters=filedepth, kernel_size=[3, 3, 3], strides=(1, 1, 1), padding='same',activation='relu', weights=RCL.get_weights())(stack4) 
-    ## RCL.get_weight ºÎºĞ. °¡ÁßÄ¡¸¦ ·¹ÀÌ¾î¸¶´Ù °øÀ¯ÇÏ´Â°Í. °øºÎÇÊ¿ä.
+    ## RCL.get_weight ë¶€ë¶„. ê°€ì¤‘ì¹˜ë¥¼ ë ˆì´ì–´ë§ˆë‹¤ ê³µìœ í•˜ëŠ”ê²ƒ. ê³µë¶€í•„ìš”.
     stack5 =  Add()([conv1, conv3])
     stack6 = BatchNormalization(axis=4, scale=False)(stack5)
 
@@ -197,6 +200,9 @@ def Dense_U_Net(input_img, mode = 'tran', base = 32, scale = 2, num_classes = 7)
     
     return model
 
+# ===========================================================
+# loss ê´€ë ¨
+# ===========================================================
 def tversky_loss(y_true, y_pred):
     alpha = 0.5
     beta  = 0.5
@@ -290,6 +296,9 @@ def tversky_loss(y_true, y_pred):
 
 
 '''
+# ===========================================================
+# Data load
+# ===========================================================
 nodule_num=15
 
 print('%d Loading...'%nodule_num)
@@ -327,6 +336,11 @@ np.save('../data/manual/%d/test_dic.npy'%nodule_num,test_dic)
 np.save('../data/manual/%d/test_x.npy'%nodule_num,test_x)
 np.save('../data/manual/%d/test_label.npy'%nodule_num,test_label)
 np.save('../data/manual/%d/test_y.npy'%nodule_num,test_y)
+
+
+# ===========================================================
+# Train
+# ===========================================================
 
 input_img = Input(shape=(128,128,128,1))
 model = Dense_U_Net(input_img, mode = 'tran', base = 32, scale = 2, num_classes = 2)
