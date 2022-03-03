@@ -2,34 +2,29 @@
 
 #!/usr/bin/env python
 
+import os 
 import numpy as np
-import matplotlib.pyplot as plt
-import glob, os
+import pandas as pd
+import glob
+
+from PIL import Image
 import tensorflow as tf
-import keras 
-from keras.models import Model
-from keras.optimizers import Adam
-from keras.callbacks import ModelCheckpoint, EarlyStopping,ReduceLROnPlateau
-from keras import backend as K
-from keras.utils import plot_model
-from keras.models import load_model
-from keras.utils import multi_gpu_model
+import matplotlib.pyplot as plt
 
-import cv2
-from tqdm import tqdm, tqdm_notebook
-from sklearn.model_selection import train_test_split
-
-#Dila U-Net
-from keras.layers import *
-from keras.models import Model
+from keras.models import *
+from keras.optimizers import *
 from keras import backend as K
+from keras.layers.core import Lambda
+from keras.layers.merge import concatenate,add
 from keras.layers.normalization import BatchNormalization
-from keras.preprocessing.image import ImageDataGenerator
-import random
+from keras.layers.convolutional_recurrent import ConvLSTM2D
+from keras.layers import Input, merge, Dropout, concatenate, Conv3D, MaxPooling3D, UpSampling3D, Activation, Conv3DTranspose, Reshape, multiply
+from keras.callbacks import ModelCheckpoint, LearningRateScheduler, History, ReduceLROnPlateau, EarlyStopping
+from keras.utils.generic_utils import get_custom_objects
+from keras.utils import multi_gpu_model
+from keras.models import Model
+from keras.regularizers import l2
 
-tf.logging.set_verbosity(tf.logging.INFO)
-from tensorflow_large_model_support import LMS
-    
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 
 
@@ -37,166 +32,86 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 # Layers
 # ===========================================================
 
-def upsample_conv(filters, kernel_size, strides, padding):
-    return Conv3DTranspose(filters, kernel_size, strides=strides, padding=padding)
-
-
-def upsample_simple(filters, kernel_size, strides, padding):
-    return UpSampling3D(strides)
-
-
-# 많은 파라미터가 생기기 때문에 가장 중요한 피쳐맵을 뽑는 아랫단에만 넣는다는 개념
-def Multi_dilated_conv(inputs, filters):
-
-    dilated_conv1 = Conv3D(64, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(inputs)
-    dilated_conv1 = Conv3D(64, (3, 3, 3), strides=(1, 1, 1), activation = None, dilation_rate = (2,2,2), padding='same', kernel_initializer='he_normal')(dilated_conv1) 
-    dilated_conv1 = Conv3D(filters, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(dilated_conv1)
-    dilated_conv1_add = add([inputs, dilated_conv1])  ## 이부분이 숏컷 (residual)
-    dilated_conv1_add = BatchNormalization(axis=4, scale=False)(dilated_conv1_add)  
-    dilated_conv1_add = Activation(activation='relu')(dilated_conv1_add)
-  
-    dilated_conv2 = Conv3D(64, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(inputs)  
-    dilated_conv2 = Conv3D(64, (3, 3, 3), strides=(1, 1, 1), activation = None, dilation_rate = (4,4,4), padding='same', kernel_initializer='he_normal')(dilated_conv2)
-    dilated_conv2 = Conv3D(filters, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(dilated_conv2)
-    dilated_conv2_add = add([inputs, dilated_conv2])
-    dilated_conv2_add = BatchNormalization(axis=4, scale=False)(dilated_conv2_add)
-    dilated_conv2_add = Activation(activation='relu')(dilated_conv2_add)
+def Conv3D_block(input_layer, out_n_filters, kernel_size=[3,3,3], stride=[1,1,1], padding='same'):
     
-    dilated_conv3 = Conv3D(64, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(inputs)
-    dilated_conv3 = Conv3D(64, (3, 3, 3), strides=(1, 1, 1), activation = None, dilation_rate = (8,8,8), padding='same', kernel_initializer='he_normal')(dilated_conv3)
-    dilated_conv3 = Conv3D(filters, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(dilated_conv3)
-    dilated_conv3_add = add([inputs, dilated_conv3])
-    dilated_conv3_add = BatchNormalization(axis=4, scale=False)(dilated_conv3_add)
-    dilated_conv3_add = Activation(activation='relu')(dilated_conv3_add)
-
-    #dilated_conv4 = Conv3D(64, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(inputs)
-    #dilated_conv4 = Conv3D(64, (3, 3, 3), strides=(1, 1, 1), activation = None, dilation_rate = (16,16,16), padding='same', kernel_initializer='he_normal')(dilated_conv4) ## 인풋 이미지가 128,128로 작기때문에 16까지는 필요없을 수 있다.
-    #dilated_conv4 = Conv3D(filters, (1, 1, 1), strides=(1, 1, 1), activation = None, padding='same', kernel_initializer='he_normal')(dilated_conv4)
-    #dilated_conv4_add = add([inputs, dilated_conv4])
-    #dilated_conv4_add = BatchNormalization(axis=4, scale=False)(dilated_conv4_add)
-    #dilated_conv4_add = Activation(activation='relu')(dilated_conv4_add)
+    layer = input_layer
+    for i in range(2):
+        layer = Conv3D(out_n_filters, kernel_size, strides=stride, padding=padding)(layer)
+        layer = BatchNormalization()(layer)
+        layer = Activation('relu')(layer)        
+        
+    out_layer = layer
     
-  
-    #pyramid = concatenate([dilated_conv1_add, dilated_conv2_add, dilated_conv3_add, dilated_conv4_add], axis=4)
-    pyramid = concatenate([dilated_conv1_add, dilated_conv2_add, dilated_conv3_add], axis=4)
-    return pyramid
-  
-#피쳐 뽑는 부분 or skip concat 부분 or RCL블락 통과 후 concat
-def RCL_block(input, filedepth): 
-    conv1 = Conv3D(filters=filedepth, kernel_size=[3, 3, 3], strides=(1, 1, 1), padding='same',activation='relu')(input)
-    stack2 = BatchNormalization(axis=4, scale=False)(conv1)
+    return out_layer
 
-    RCL = Conv3D(filters=filedepth, kernel_size=[3, 3, 3], strides=(1, 1, 1), padding='same', activation='relu')
-
-    conv2 = RCL(stack2)
-    stack3 = Add()([conv1, conv2])
-    stack4 = BatchNormalization(axis=4, scale=False)(stack3)
-
-    conv3 = Conv3D(filters=filedepth, kernel_size=[3, 3, 3], strides=(1, 1, 1), padding='same',activation='relu', weights=RCL.get_weights())(stack4) 
-    ## RCL.get_weight 부분. 가중치를 레이어마다 공유하는것. 공부필요.
-    stack5 =  Add()([conv1, conv3])
-    stack6 = BatchNormalization(axis=4, scale=False)(stack5)
-
-    conv4 = Conv3D(filters=filedepth, kernel_size=[3, 3, 3], strides=(1, 1, 1), padding='same',activation='relu', weights=RCL.get_weights())(stack6)
-    stack7 =  Add()([conv1, conv4])
-    stack8 = BatchNormalization(axis=4, scale=False)(stack7)
-
-
-    return stack8
-
-def Dense_U_Net(input_img, mode = 'tran', base = 32, scale = 2, num_classes = 7):
-    if mode == 'tran':
-        upsample = upsample_conv
-    elif mode == 'simp':
-        upsample = upsample_simple
-    conv1 = Conv3D(base, 3, activation=None, padding='same', kernel_initializer='he_normal')(input_img)
-    conv1 = BatchNormalization()(conv1)
-    conv1 = Activation(activation='relu')(conv1)
-    conv1 = Conv3D(base, 3, activation=None, padding='same', kernel_initializer='he_normal')(conv1)
-    conv1 = BatchNormalization()(conv1)
-    conv1 = Activation(activation='relu')(conv1)
+def Up_and_Concate(down_layer, layer):
     
-    conv1 = RCL_block(conv1, 32)
-    pool1 = MaxPooling3D(pool_size=(1, 2, 2))(conv1)
-
-    conv2 = Conv3D((scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(pool1)
-    conv2 = BatchNormalization()(conv2)
-    conv2 = Activation(activation='relu')(conv2)
-    conv2 = Conv3D((scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(conv2)
-    conv2 = BatchNormalization()(conv2)
-    conv2 = Activation(activation='relu')(conv2)
+    input_channel = down_layer.get_shape().as_list()[4]
+    output_channel = input_channel // 2
+    up = UpSampling3D(size = (2,2,2))(down_layer)
+    concate = concatenate([up, layer])
+    return concate
     
-    conv2 = RCL_block(conv2, 64)
-    pool2 = MaxPooling3D(pool_size=(1, 2, 2))(conv2)
-
-    conv3 = Conv3D((scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(pool2)
-    conv3 = BatchNormalization()(conv3)
-    conv3 = Activation(activation='relu')(conv3)
-    conv3 = Conv3D((scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(conv3)
-    conv3 = BatchNormalization()(conv3)
-    conv3 = Activation(activation='relu')(conv3)
     
-    conv3 = RCL_block(conv3, 128)
-    pool3 = MaxPooling3D(pool_size=(1, 2, 2))(conv3)
+def attention_block_3d(x, g, inter_channel):
 
-    conv4 = Conv3D((scale * scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(pool3)
-    conv4 = BatchNormalization()(conv4)
-    conv4 = Activation(activation='relu')(conv4)
-    conv4 = Conv3D((scale * scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(conv4)
-    conv4 = BatchNormalization()(conv4)
-    conv4 = Activation(activation='relu')(conv4)
+    theta_x = Conv3D(inter_channel, [1, 1, 1], strides=[1, 1, 1])(x)
+    phi_g = Conv3D(inter_channel, [1, 1, 1], strides=[1, 1, 1])(g)
+    f = Activation('relu')(add([theta_x, phi_g]))
+    psi_f = Conv3D(1, [1, 1, 1], strides=[1, 1, 1])(f)
+    rate = Activation('sigmoid')(psi_f)
+    att_x = multiply([x, rate])
+
+    return att_x
     
-    conv4 = RCL_block(conv4, 256)
-    pool4 = MaxPooling3D(pool_size=(1, 2, 2))(conv4)
-
-    conv5 = Conv3D((scale * scale * scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(pool4)
-    conv5 = BatchNormalization()(conv5)
-    conv5 = Activation(activation='relu')(conv5)
-    conv5 = Conv3D((scale * scale * scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(conv5)
-    conv5 = BatchNormalization()(conv5)
-    conv5 = Activation(activation='relu')(conv5)
     
-    #conv5 = RCL_block(conv5, 512)
+def attention_up_and_concate(down_layer, layer):
+    in_channel = down_layer.get_shape().as_list()[4]
+    up = UpSampling3D((2, 2, 2))(down_layer)
+    layer = attention_block_3d(x=layer, g=up, inter_channel=in_channel // 4)
+    concate = concatenate([up, layer])
+    return concate
+
+def U_Net_3D(time, img_w, img_h, n_label):
+        
+    inputs = Input((time, img_w, img_h, 1), dtype = 'float32')
+    x = inputs
+    depth = 4
+    features = 32
+    down_layer = []
+    supervision_layer = []
     
-    conv5 = Multi_dilated_conv(conv5, 512)
-    conv5 = BatchNormalization()(conv5)
-    conv5 = Activation('relu')(conv5)
-    conv5 = Conv3D((scale * scale * scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(conv5)
-    conv5 = BatchNormalization()(conv5)
-    conv5 = Activation(activation='relu')(conv5)
+    for i in range(depth):
+        
+        x = Conv3D_block(x, features)
+        down_layer.append(x)
+        x = MaxPooling3D(pool_size=[2, 2, 2], strides=[2, 2, 2])(x)
+        features = features * 2
+    x = Conv3D_block(x, features)
     
-    pool6 = upsample((scale * scale * scale) * base, (2, 2, 2), strides=(1, 2, 2), padding='same')(conv5)
-    merge = concatenate([conv4, pool6], axis = 4)
-    conv6 = Conv3D((scale * scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(merge)
-    conv6 = BatchNormalization()(conv6)
-    conv6 = Activation(activation='relu')(conv6)
-    conv6 = Conv3D((scale * scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(conv6)
-    conv6 = BatchNormalization()(conv6)
-    conv6 = Activation(activation='relu')(conv6)
+    for i in reversed(range(depth)):
+        features = features // 2
+        x = attention_up_and_concate(x, down_layer[i])
+        x = Conv3D_block(x, features)
+        supervision_layer.append(x)    
+       
+#     output_1 = UpSampling3D((8, 8, 8))(supervision_layer[0])
+#     output_1 = Conv3D(n_label, 3, activation='sigmoid', padding='same', name='out_1')(output_1)
 
-    pool7 = upsample((scale * scale) * base, (2, 2, 2), strides=(1, 2, 2), padding='same')(conv6)
-    merge = concatenate([conv3, pool7], axis = 4)
-    conv7 = Conv3D((scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(merge)
-    conv7 = BatchNormalization()(conv7)
-    conv7 = Activation(activation='relu')(conv7)
-    conv7 = Conv3D((scale * scale) * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(conv7)
-    conv7 = BatchNormalization()(conv7)
-    conv7 = Activation(activation='relu')(conv7)
-
-    pool8 = upsample(scale * base, (2, 2, 2), strides=(1, 2, 2), padding='same')(conv7)
-    merge = concatenate([conv2, pool8], axis = 4)
-    conv8 = Conv3D(scale * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(merge)
-    conv8 = BatchNormalization()(conv8)
-    conv8 = Activation(activation='relu')(conv8)
-    conv8 = Conv3D(scale * base, 3, activation=None, padding='same', kernel_initializer='he_normal')(conv8)
-    conv8 = BatchNormalization()(conv8)
-    conv8 = Activation(activation='relu')(conv8)
-
-    pool9 = upsample(base, (2, 2, 2), strides=(1, 2, 2), padding='same')(conv8)
-    merge = concatenate([conv1, pool9], axis = 4)
-    conv9 = Conv3D(base, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge)
-    out = Conv3D(num_classes, 3, activation='softmax', padding='same')(conv9)
-    model = Model(inputs=input_img, outputs=out)
+    output_2 = UpSampling3D((4, 4, 4))(supervision_layer[1])
+    output_2 = Conv3D(n_label, 3, activation='sigmoid', padding='same', name='out_2')(output_2)
+    
+    output_3 = UpSampling3D((2, 2, 2))(supervision_layer[2])
+    output_3 = Conv3D(n_label, 3, activation='sigmoid',padding='same', name='out_3')(output_3) 
+    
+#     output_4 = UpSampling3D(features, (1, 1, 1))(supervision_layer[3])
+    output_4 = Conv3D(n_label, 3, activation='sigmoid', padding='same', name='out_4')(supervision_layer[3]) 
+    
+#     outputs = conv_last
+#     output_all = (x_output_1+x_output_2+x_output_3+outputs)/4
+    
+    model = Model(inputs = inputs, outputs = [output_2, output_3, output_4])
+    model.summary()
     
     return model
 
@@ -248,34 +163,102 @@ def dice_cost_1(y_true, y_predicted):
     num_sum = 2.0 * K.sum(mask_true * mask_pred) + K.epsilon()
     den_sum = K.sum(mask_true) + K.sum(mask_pred)+ K.epsilon()
 
-    return num_sum/den_sum
+epsilon = K.epsilon()
+gamma = 0
+alpha = 0.6
+beta = 0.6
+
+  
+def recall(y_target, y_pred):
+    # clip(t, clip_value_min, clip_value_max) : clip_value_min~clip_value_max 이외 가장자리를 깎아 낸다
+    # round : 반올림한다
+    y_target_yn = K.round(K.clip(y_target, 0, 1)) # 실제값을 0(Negative) 또는 1(Positive)로 설정한다
+    y_pred_yn = K.round(K.clip(y_pred, 0, 1)) # 예측값을 0(Negative) 또는 1(Positive)로 설정한다
+
+    # True Positive는 실제 값과 예측 값이 모두 1(Positive)인 경우이다
+    count_true_positive = K.sum(y_target_yn * y_pred_yn) 
+
+    # (True Positive + False Negative) = 실제 값이 1(Positive) 전체
+    count_true_positive_false_negative = K.sum(y_target_yn)
+
+    # Recall =  (True Positive) / (True Positive + False Negative)
+    # K.epsilon()는 'divide by zero error' 예방차원에서 작은 수를 더한다
+    recall = count_true_positive / (count_true_positive_false_negative + K.epsilon())
+
+    # return a single tensor value
+    return recall
 
 
-def dice_cost_1_loss(y_true, y_predicted):
+def precision(y_target, y_pred):
+    # clip(t, clip_value_min, clip_value_max) : clip_value_min~clip_value_max 이외 가장자리를 깎아 낸다
+    # round : 반올림한다
+    y_pred_yn = K.round(K.clip(y_pred, 0, 1)) # 예측값을 0(Negative) 또는 1(Positive)로 설정한다
+    y_target_yn = K.round(K.clip(y_target, 0, 1)) # 실제값을 0(Negative) 또는 1(Positive)로 설정한다
 
-    mask_true = y_true[:, :, :, :, 1]
-    mask_pred = y_predicted[:, :, :, :, 1]
+    # True Positive는 실제 값과 예측 값이 모두 1(Positive)인 경우이다
+    count_true_positive = K.sum(y_target_yn * y_pred_yn) 
 
-    num_sum = 2.0 * K.sum(mask_true * mask_pred) + K.epsilon()
-    den_sum = K.sum(mask_true) + K.sum(mask_pred)+ K.epsilon()
+    # (True Positive + False Positive) = 예측 값이 1(Positive) 전체
+    count_true_positive_false_positive = K.sum(y_pred_yn)
+
+    # Precision = (True Positive) / (True Positive + False Positive)
+    # K.epsilon()는 'divide by zero error' 예방차원에서 작은 수를 더한다
+    precision = count_true_positive / (count_true_positive_false_positive + K.epsilon())
+
+    # return a single tensor value
+    return precision
+
+
+def f1score(y_target, y_pred):
+    _recall = recall(y_target, y_pred)
+    _precision = precision(y_target, y_pred)
+    # K.epsilon()는 'divide by zero error' 예방차원에서 작은 수를 더한다
+    _f1score = ( 2 * _recall * _precision) / (_recall + _precision+ K.epsilon())
     
-    return 1-(num_sum/den_sum)
+    # return a single tensor value
+    return _f1score
+
+def iou_coef(y_true, y_pred, smooth=1):
+    intersection = K.sum(K.abs(y_true * y_pred), axis=[1,2,3])
+    union = K.sum(y_true,[1,2,3])+K.sum(y_pred,[1,2,3])-intersection
+    iou = K.mean((intersection + smooth) / (union + smooth), axis=0)
+    return iou
 
 
-def dice_cost_01(y_true, y_predicted):
+def balanced_loss(y_true, y_pred):
+    pt = y_pred * y_true + (1-y_pred) * (1-y_true)
+    pt = K.clip(pt, epsilon, 1-epsilon)
+    CE = -K.log(pt)
+    BL = alpha * CE
+    
+    return K.sum(BL, axis=1)
 
-    dice_1 = dice_cost_0(y_true, y_predicted)
-    dice_2 = dice_cost_1(y_true, y_predicted)
 
-    return 1- (1/2*(dice_1+dice_2))
+def focal_loss(y_true, y_pred):
+    pt = y_pred * y_true + (1-y_pred) * (1-y_true)
+    pt = K.clip(pt, epsilon, 1-epsilon)
+    CE = -K.log(pt)
+    FL = alpha * K.pow(1-pt, gamma) * CE
+    
+    return K.sum(FL, axis=1)
 
 
-# Ref: salehi17, "Twersky loss function for image segmentation using 3D FCDN"
-# -> the score is computed for each class separately and then summed
-# alpha=beta=0.5 : dice coefficient
-# alpha=beta=1   : tanimoto coefficient (also known as jaccard)
-# alpha+beta=1   : produces set of F*-scores
-# implemented by E. Moebel, 06/04/18
+def dice_coef(y_true, y_pred, smooth=0.001):
+    y_true_f = K.flatten(y_true)
+    y_pred_f = K.flatten(y_pred)
+    intersection = K.sum(y_true_f * y_pred_f)
+    return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+
+
+def dice_coef_loss(y_true, y_pred):
+    return 1 - dice_coef(y_true, y_pred)
+
+
+def cus_loss(y_true, y_pred):
+    
+    return (1 - beta) * focal_loss(y_true, y_pred) + beta * dice_coef_loss(y_true, y_pred)
+
+
 def tversky_loss(y_true, y_pred):
     alpha = 0.5
     beta  = 0.5
@@ -295,86 +278,74 @@ def tversky_loss(y_true, y_pred):
     return Ncl-T
 
 
+get_custom_objects().update({
+    
+    'cus_loss': cus_loss,
+    'iou_coef' : iou_coef,
+    'f1score' : f1score,
+    'precision' : precision,
+    'recall' : recall,
+    'balanced_loss' : balanced_loss,
+    'focal_loss' : focal_loss,
+    'dice_coef' : dice_coef,
+    'dice_coef_loss' : dice_coef_loss,
+    'cus_loss' : cus_loss,
+    'tversky_loss' : tversky_loss,
+        
+})
+
+
 '''
 # ===========================================================
 # Data load
 # ===========================================================
-nodule_num=15
+nodule_num=30
+image=np.load('../data/manualgan/%d/241_CTs_resam.npy'%nodule_num,allow_pickle=True)
+label=np.load('../data/manualgan/%d/241_labels_resam.npy'%nodule_num,allow_pickle=True)
+print(image.shape, label.shape)
+print(image[0].shape, label[0].shape)
 
-print('%d Loading...'%nodule_num)
-X = np.load('../data/manual/%d/241_CTs_resam.npy'%nodule_num, allow_pickle=True)
-Y = np.load('../data/manual/%d/241_ytrain.npy'%nodule_num, allow_pickle=True)
-print('Loaded.')
-#X = np.load('/root/YR_Park/data/3d-unet/300_CTs_resam.npy', allow_pickle=True)
-#Y = np.load('/root/YR_Park/data/3d-unet/300_ytrain.npy', allow_pickle=True)
+train_image=image[:-20,:,:,:,:]
+train_label=label[:-20,:,:,:,:]
 
-train_dic, test_dic, train_label, test_label = train_test_split(X, Y, test_size=0.2)
-test_dic, test_x, test_label, test_y = train_test_split(test_dic, test_label, test_size=0.5)
+validation_image=image[-20:-10,:,:,:,:]
+validation_label=label[-20:-10,:,:,:,:]
 
-
-print(train_dic.shape, np.max(train_dic), np.min(train_dic))
-print(train_label.shape, np.max(train_label), np.min(train_label))
-print(test_dic.shape, np.max(test_dic), np.min(test_dic))
-print(test_label.shape, np.max(test_label), np.min(test_label))
-print(test_x.shape, np.max(test_x), np.min(test_x))
-print(test_y.shape, np.max(test_y), np.min(test_y))
-
-train_dic = train_dic.astype(np.float32)
-test_dic = test_dic.astype(np.float32)
-train_label = train_label.astype(np.float32)
-test_label = test_label.astype(np.float32)
-test_x = test_x.astype(np.float32)
-test_y = test_y.astype(np.float32)
+test_image=image[-10:,:,:,:,:]
+test_label=label[-10:,:,:,:,:]
 
 
-#np.save('/root/YR_Park/data/3d-unet/test_dic.npy',test_dic)
-#np.save('/root/YR_Park/data/3d-unet/test_x.npy',test_x)
-#np.save('/root/YR_Park/data/3d-unet/test_label.npy',test_label)
-#np.save('/root/YR_Park/data/3d-unet/test_y.npy',test_y)
-
-np.save('../data/manual/%d/test_dic.npy'%nodule_num,test_dic)
-np.save('../data/manual/%d/test_x.npy'%nodule_num,test_x)
-np.save('../data/manual/%d/test_label.npy'%nodule_num,test_label)
-np.save('../data/manual/%d/test_y.npy'%nodule_num,test_y)
+print('-'*30)
+print('tr=',train_image.shape)
+print('tr=',train_label.shape)
+print('-'*30)
+print('val=',validation_image.shape)
+print('val=',validation_label.shape)
+print('-'*30)
+print('te=',test_image.shape)
+print('te=',test_label.shape)
 
 
 # ===========================================================
 # Train
 # ===========================================================
+model = U_Net_3D(128,128,128,1)
+reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=5, verbose=1, min_delta=1e-8)
+earlystopper = EarlyStopping(monitor='val_loss', patience=30, verbose=1)
+model_checkpoint = ModelCheckpoint('../result/model/manualgan/supervision_128x128x128_%d_ValRearrange.h5'%nodule_num, monitor='val_loss', verbose=1, save_best_only=True, save_weights_only=False)
 
-input_img = Input(shape=(128,128,128,1))
-model = Dense_U_Net(input_img, mode = 'tran', base = 32, scale = 2, num_classes = 2)
-model.summary()
-
-
-lms_callback = LMS()#swapout_threshold=300, swapin_groupby=0, swapin_ahead=1)
-lms_callback.batch_size = 2
-lms_callback.autotune_plot= False
+callbacks_list = [reduce_lr, model_checkpoint, earlystopper]
 
 
-#model = multi_gpu_model(model, gpus=4)
-model.compile(optimizer=Adam(lr=0.001), loss=tversky_loss,
-              metrics=[dice_coef])
-              #metrics=[dice_cost_0, dice_cost_1, dice_cost_01, tversky_loss])
+losses ={'out_2':dice_coef_loss,
+         'out_3':dice_coef_loss,
+         'out_4':dice_coef_loss}
 
-checkpointer = ModelCheckpoint(filepath='../result/model/manual/3Dunet_best_test_%d.h5'%nodule_num, verbose=1, save_best_only=True)
-reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.2,
-                              patience=5, min_lr=0.000001,verbose=1)
-earlystopper = EarlyStopping(patience=30, verbose=1)
 
-#callbacks = [reduce_lr, earlystopper, checkpointer]
+# model = multi_gpu_model(model,gpus=8)
+model.compile(optimizer=Adam(lr=0.001), loss=losses, metrics=[dice_coef])
+print('Fitting model...')
+print('-'*200)
+hist = model.fit(train_image, [train_label, train_label, train_label], batch_size=1, epochs=200, verbose=1,validation_data= (validation_image, [validation_label, validation_label, validation_label]), shuffle=True, callbacks=callbacks_list)
 
-results = model.fit(train_dic,train_label,validation_data=(test_dic,test_label),verbose=1,
-                    batch_size=1, epochs=500,
-                    callbacks = [reduce_lr, earlystopper, checkpointer])
-                    
-fig = plt.figure()
-# plt.axes(facecolor='white')
-plt.plot(results.history['loss'])
-plt.plot(results.history['val_loss'])
-plt.title('model loss')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.legend(['train', 'val'], loc='upper left')
-plt.savefig('../result/model/manual/loss_test_%d.png'%nodule_num)
 '''
