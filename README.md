@@ -55,7 +55,7 @@
 
 [[3D-CT-GAN repository](https://github.com/yerang823/3D-CT-GAN)]
 
-## Final result
+## Data & Final result
 ![tr_te](https://user-images.githubusercontent.com/97432613/156679309-427ce5ce-7967-449c-a940-3fb172ead002.png)
 
 ![result_1](https://user-images.githubusercontent.com/97432613/156354252-77b71722-c62e-4b25-be1f-f96871191555.png)
